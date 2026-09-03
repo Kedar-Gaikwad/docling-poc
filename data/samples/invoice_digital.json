@@ -1,0 +1,75 @@
+{
+  "key": "invoice_digital",
+  "kind": "digital",
+  "title": "INVOICE INV-2026-0941",
+  "kv": {
+    "Invoice Number": "INV-2026-0941",
+    "Bill To": "Acme Manufacturing",
+    "Payment Terms": "Net 30",
+    "PO Number": "PO-77419"
+  },
+  "tables": [
+    {
+      "name": "line_items",
+      "caption": "Invoice line items",
+      "headers": [
+        "SKU",
+        "Description",
+        "Qty",
+        "Unit Price",
+        "Amount"
+      ],
+      "rows": [
+        [
+          "WID-100",
+          "Industrial widget A",
+          "12",
+          "24.50",
+          "294.00"
+        ],
+        [
+          "GAD-220",
+          "Precision gadget B",
+          "5",
+          "119.00",
+          "595.00"
+        ],
+        [
+          "CAB-018",
+          "Shielded cable 2m",
+          "20",
+          "8.75",
+          "175.00"
+        ],
+        [
+          "SVC-001",
+          "Onsite installation",
+          "1",
+          "450.00",
+          "450.00"
+        ],
+        [
+          "",
+          "Subtotal",
+          "",
+          "",
+          "1514.00"
+        ],
+        [
+          "",
+          "Tax 8%",
+          "",
+          "",
+          "121.12"
+        ],
+        [
+          "",
+          "Total due",
+          "",
+          "",
+          "1635.12"
+        ]
+      ]
+    }
+  ]
+}

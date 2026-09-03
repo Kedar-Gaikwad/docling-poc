@@ -1,0 +1,22 @@
+[project]
+name = "docling-poc"
+version = "0.1.0"
+description = "Local proof of concept: Docling vs AWS Textract for OCR and table extraction, including dollar-savings estimates."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "docling[rapidocr]>=2.50.0",
+    "pandas>=2.2",
+    "tabulate>=0.9",
+    "reportlab>=4.2",
+    "pillow>=10.4",
+    "boto3>=1.35",
+    "python-dotenv>=1.0",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["src*"]

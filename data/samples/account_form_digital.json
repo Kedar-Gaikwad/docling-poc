@@ -1,0 +1,53 @@
+{
+  "key": "account_form_digital",
+  "kind": "digital",
+  "title": "Utility Service Statement",
+  "kv": {
+    "Customer Name": "Jordan Hale",
+    "Account Number": "AC-88921"
+  },
+  "tables": [
+    {
+      "name": "service_account",
+      "caption": "Service account details",
+      "headers": [
+        "Field",
+        "Value"
+      ],
+      "rows": [
+        [
+          "Customer Name",
+          "Jordan Hale"
+        ],
+        [
+          "Account Number",
+          "AC-88921"
+        ],
+        [
+          "Service Address",
+          "14 Harbor Lane, Boston MA"
+        ],
+        [
+          "Plan",
+          "Industrial Plus"
+        ],
+        [
+          "Meter ID",
+          "MTR-44109"
+        ],
+        [
+          "Billing Period",
+          "Jul 2026"
+        ],
+        [
+          "Usage kWh",
+          "14820"
+        ],
+        [
+          "Amount Due",
+          "2376.40"
+        ]
+      ]
+    }
+  ]
+}

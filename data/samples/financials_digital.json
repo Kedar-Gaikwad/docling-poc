@@ -1,0 +1,70 @@
+{
+  "key": "financials_digital",
+  "kind": "digital",
+  "title": "FY2025 Quarterly Operating Results",
+  "kv": {},
+  "tables": [
+    {
+      "name": "income_statement",
+      "caption": "Consolidated income statement (USD millions)",
+      "headers": [
+        "Metric",
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4",
+        "FY2025"
+      ],
+      "rows": [
+        [
+          "Revenue",
+          "12.4",
+          "13.1",
+          "14.8",
+          "16.2",
+          "56.5"
+        ],
+        [
+          "Cost of goods sold",
+          "7.1",
+          "7.4",
+          "8.0",
+          "8.6",
+          "31.1"
+        ],
+        [
+          "Gross profit",
+          "5.3",
+          "5.7",
+          "6.8",
+          "7.6",
+          "25.4"
+        ],
+        [
+          "Operating expenses",
+          "3.2",
+          "3.3",
+          "3.5",
+          "3.7",
+          "13.7"
+        ],
+        [
+          "Operating income",
+          "2.1",
+          "2.4",
+          "3.3",
+          "3.9",
+          "11.7"
+        ],
+        [
+          "Net margin %",
+          "16.9",
+          "18.3",
+          "22.3",
+          "24.1",
+          "20.7"
+        ]
+      ]
+    }
+  ]
+}
