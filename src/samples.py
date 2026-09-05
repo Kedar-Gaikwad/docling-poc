@@ -53,6 +53,20 @@ FINANCIAL_TABLE = TableSpec(
     ],
 )
 
+BALANCE_SHEET_TABLE = TableSpec(
+    name="balance_sheet",
+    caption="Balance sheet snapshot (USD millions)",
+    headers=["Item", "31 Mar", "30 Jun", "30 Sep", "31 Dec"],
+    rows=[
+        ["Cash and equivalents", "4.2", "4.8", "5.1", "6.0"],
+        ["Accounts receivable", "3.1", "3.4", "3.9", "4.2"],
+        ["Inventory", "2.6", "2.5", "2.8", "2.9"],
+        ["Total assets", "18.4", "19.1", "20.6", "22.3"],
+        ["Total liabilities", "9.8", "9.9", "10.2", "10.5"],
+        ["Shareholders equity", "8.6", "9.2", "10.4", "11.8"],
+    ],
+)
+
 FORM_TABLE = TableSpec(
     name="service_account",
     caption="Service account details",
@@ -111,9 +125,10 @@ SAMPLES: list[SampleDoc] = [
         kind="digital",
         paragraphs=[
             "Figures below are unaudited and stated in millions of USD. "
-            "Gross profit equals revenue minus cost of goods sold."
+            "Gross profit equals revenue minus cost of goods sold. "
+            "Balance sheet amounts are period-end snapshots."
         ],
-        tables=[FINANCIAL_TABLE],
+        tables=[FINANCIAL_TABLE, BALANCE_SHEET_TABLE],
     ),
     SampleDoc(
         key="financials_scanned",
@@ -122,9 +137,10 @@ SAMPLES: list[SampleDoc] = [
         kind="scanned",
         paragraphs=[
             "Figures below are unaudited and stated in millions of USD. "
-            "Gross profit equals revenue minus cost of goods sold."
+            "Gross profit equals revenue minus cost of goods sold. "
+            "Balance sheet amounts are period-end snapshots."
         ],
-        tables=[FINANCIAL_TABLE],
+        tables=[FINANCIAL_TABLE, BALANCE_SHEET_TABLE],
     ),
     SampleDoc(
         key="account_form_digital",

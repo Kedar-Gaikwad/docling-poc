@@ -7,6 +7,8 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .env
+rootkey.csv
+*.pem
 .DS_Store
 Thumbs.db
 

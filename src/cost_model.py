@@ -11,6 +11,8 @@ from src.config import (
     EC2_USD_PER_HOUR,
     REPORTS_DIR,
     TEXTRACT_USD_PER_PAGE,
+    VLM_OUT,
+    VLM_USD_PER_MTOK,
     VOLUME_TIER_PAGES,
 )
 
@@ -70,6 +72,48 @@ def measured_seconds_per_page() -> dict[str, float]:
     return out
 
 
+def measured_vlm_usage() -> dict[str, float]:
+    summary_path = VLM_OUT / "run_summary.json"
+    if not summary_path.exists():
+        return {}
+    rows = json.loads(summary_path.read_text(encoding="utf-8"))
+    inputs, outputs, haiku_usd, seconds = [], [], [], []
+    for row in rows:
+        if row.get("error") or row.get("skipped"):
+            continue
+        if row.get("input_tokens") is not None:
+            inputs.append(int(row["input_tokens"]))
+        if row.get("output_tokens") is not None:
+            outputs.append(int(row["output_tokens"]))
+        if row.get("usd_haiku_4_5") is not None:
+            haiku_usd.append(float(row["usd_haiku_4_5"]))
+        if row.get("seconds"):
+            seconds.append(float(row["seconds"]))
+    if not inputs:
+        return {}
+
+    def _mean(values: list[float]) -> float:
+        return round(sum(values) / len(values), 3)
+
+    mean_in = _mean(inputs)
+    mean_out = _mean(outputs)
+    haiku_rates = VLM_USD_PER_MTOK["haiku-4.5"]
+    sonnet_rates = VLM_USD_PER_MTOK["sonnet-4.5"]
+    return {
+        "pages": len(inputs),
+        "mean_input_tokens": mean_in,
+        "mean_output_tokens": mean_out,
+        "mean_seconds": _mean(seconds) if seconds else 0.0,
+        "mean_usd_haiku_4_5": round(sum(haiku_usd) / len(haiku_usd), 6) if haiku_usd else 0.0,
+        "usd_per_page_haiku": round(
+            (mean_in * haiku_rates["input"] + mean_out * haiku_rates["output"]) / 1_000_000, 6
+        ),
+        "usd_per_page_sonnet": round(
+            (mean_in * sonnet_rates["input"] + mean_out * sonnet_rates["output"]) / 1_000_000, 6
+        ),
+    }
+
+
 def estimate(
     pages_per_month: int | None = None,
     seconds_per_page: float | None = None,
@@ -77,8 +121,11 @@ def estimate(
     utilization: float = 0.7,
 ) -> dict[str, Any]:
     measured = measured_seconds_per_page()
+    vlm = measured_vlm_usage()
     spp = seconds_per_page or measured.get("all") or 2.0
     volumes = [pages_per_month] if pages_per_month else DEFAULT_SCENARIOS
+    haiku_pp = vlm.get("usd_per_page_haiku") or 0.0
+    sonnet_pp = vlm.get("usd_per_page_sonnet") or 0.0
 
     scenarios = []
     for pages in volumes:
@@ -88,6 +135,8 @@ def estimate(
         }
         compute = docling_compute_cost(pages, spp, instance, utilization)
         local = docling_compute_cost(pages, spp, "local_gpu", utilization)
+        haiku_usd = round(pages * haiku_pp, 2)
+        sonnet_usd = round(pages * sonnet_pp, 2)
         scenarios.append(
             {
                 "pages_per_month": pages,
@@ -99,13 +148,19 @@ def estimate(
                     **compute,
                     "local_gpu_usd": local["usd"],
                 },
+                "vlm": {
+                    "haiku_4_5_usd": haiku_usd,
+                    "sonnet_4_5_usd": sonnet_usd,
+                    "haiku_usd_per_page": haiku_pp,
+                    "sonnet_usd_per_page": sonnet_pp,
+                },
                 "savings_vs_textract_tables": {
                     "usd": round(tex["tables"] - compute["usd"], 2),
                     "pct": round(100 * (1 - compute["usd"] / tex["tables"]), 1) if tex["tables"] else 0,
                 },
-                "savings_vs_textract_tables_forms": {
-                    "usd": round(tex["tables_forms"] - compute["usd"], 2),
-                    "pct": round(100 * (1 - compute["usd"] / tex["tables_forms"]), 1) if tex["tables_forms"] else 0,
+                "haiku_vs_textract_tables": {
+                    "usd": round(tex["tables"] - haiku_usd, 2),
+                    "pct": round(100 * (1 - haiku_usd / tex["tables"]), 1) if tex["tables"] and haiku_pp else 0,
                 },
             }
         )
@@ -117,13 +172,16 @@ def estimate(
             "docling_license": "MIT — $0 software",
             "compute": EC2_USD_PER_HOUR,
             "measured_seconds_per_page": measured,
+            "measured_vlm": vlm,
             "seconds_per_page_used": spp,
             "instance": instance,
             "utilization": utilization,
+            "vlm_rates_usd_per_mtok": VLM_USD_PER_MTOK,
             "notes": [
                 "Textract bills per page per feature. Tables is $0.015/page in the first 1M pages.",
                 "Layout is free when requested together with Tables.",
                 "Docling cost is compute only. Add EBS, idle capacity, and engineering time for a full TCO.",
+                "Haiku 4.5 is the cheap VLM path (vision/PDF). Sonnet 4.5 uses the same measured tokens at $3/$15 per MTok.",
                 "Docling is strongest as a Tables + layout + OCR substitute. Forms/Queries/Expense/ID are not 1:1.",
             ],
         },
@@ -138,15 +196,25 @@ def estimate(
 def _print(payload: dict[str, Any]) -> None:
     spp = payload["assumptions"]["seconds_per_page_used"]
     inst = payload["assumptions"]["instance"]
-    print(f"\nCost model  |  Docling {spp}s/page on {inst} (70% util) vs Textract pretrained rates")
-    print(f"{'pages/mo':>12}  {'Textract tables':>16}  {'Textract T+F':>14}  {'Docling compute':>16}  {'save vs tables':>14}  {'save %':>8}")
+    vlm = payload["assumptions"].get("measured_vlm") or {}
+    print(f"\nCost model  |  financial PDFs  |  Docling {spp}s/page on {inst} vs Textract vs Haiku 4.5")
+    if vlm:
+        print(
+            f"VLM tokens/page: {vlm.get('mean_input_tokens')} in / {vlm.get('mean_output_tokens')} out  "
+            f"| Haiku ${vlm.get('usd_per_page_haiku')}/page  "
+            f"| Sonnet 4.5 same tokens ${vlm.get('usd_per_page_sonnet')}/page"
+        )
+    print(
+        f"{'pages/mo':>12}  {'Textract tables':>16}  {'Docling compute':>16}  "
+        f"{'Haiku 4.5':>12}  {'Sonnet 4.5':>12}  {'Docling save':>12}"
+    )
     for row in payload["scenarios"]:
         print(
             f"{row['pages_per_month']:>12,}  "
             f"${row['textract_usd']['tables']:>14,.2f}  "
-            f"${row['textract_usd']['tables_forms']:>12,.2f}  "
             f"${row['docling']['usd']:>14,.2f}  "
-            f"${row['savings_vs_textract_tables']['usd']:>12,.2f}  "
-            f"{row['savings_vs_textract_tables']['pct']:>7.1f}%"
+            f"${row['vlm']['haiku_4_5_usd']:>10,.2f}  "
+            f"${row['vlm']['sonnet_4_5_usd']:>10,.2f}  "
+            f"${row['savings_vs_textract_tables']['usd']:>10,.2f}"
         )
     print(f"\nWrote {REPORTS_DIR / 'cost.json'}")

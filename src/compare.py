@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from src.config import DOCLING_OUT, REPORTS_DIR, SAMPLES_DIR, TEXTRACT_OUT
+from src.config import DOCLING_OUT, REPORTS_DIR, SAMPLES_DIR, TEXTRACT_OUT, VLM_OUT
 
 
 def _norm(value: Any) -> str:
@@ -80,40 +80,37 @@ def _best_table_score(expected_tables: list[dict[str, Any]], predicted_tables: l
     return {"tables": scores, "avg_cell_recall": round(avg, 3)}
 
 
-def compare_all() -> dict[str, Any]:
+def compare_all(only: str | None = "financials") -> dict[str, Any]:
     reports = []
     for gt_path in sorted(SAMPLES_DIR.glob("*.json")):
         stem = gt_path.stem
+        if only and only.lower() not in stem.lower():
+            continue
         ground = _load_json(gt_path) or {}
         docling = _load_json(DOCLING_OUT / stem / "summary.json")
         textract = _load_json(TEXTRACT_OUT / stem / "summary.json")
+        vlm = _load_json(VLM_OUT / stem / "summary.json")
         row: dict[str, Any] = {
             "stem": stem,
             "kind": ground.get("kind"),
             "ground_table_count": len(ground.get("tables") or []),
         }
-        if docling and "error" not in docling:
-            row["docling"] = {
-                "seconds": docling.get("seconds"),
-                "seconds_per_page": docling.get("seconds_per_page"),
-                "device": docling.get("device"),
-                "table_count": docling.get("table_count"),
-                "quality": _best_table_score(ground.get("tables") or [], docling.get("tables") or []),
-            }
-        else:
-            row["docling"] = {"missing": True, "error": (docling or {}).get("error")}
-        if textract and "error" not in textract:
-            row["textract"] = {
-                "seconds": textract.get("seconds"),
-                "table_count": textract.get("table_count"),
-                "quality": _best_table_score(ground.get("tables") or [], textract.get("tables") or []),
-                "key_values": textract.get("key_values"),
-            }
-        else:
-            row["textract"] = {"missing": True, "error": (textract or {}).get("error")}
+        for engine, payload, extra in (
+            ("docling", docling, ("seconds", "seconds_per_page", "device", "table_count")),
+            ("textract", textract, ("seconds", "table_count")),
+            ("vlm", vlm, ("seconds", "table_count", "model", "input_tokens", "output_tokens", "usd_haiku_4_5", "usd_sonnet_4_5_same_tokens", "mode")),
+        ):
+            if payload and "error" not in payload:
+                block = {k: payload.get(k) for k in extra}
+                block["quality"] = _best_table_score(ground.get("tables") or [], payload.get("tables") or [])
+                if engine == "textract":
+                    block["key_values"] = payload.get("key_values")
+                row[engine] = block
+            else:
+                row[engine] = {"missing": True, "error": (payload or {}).get("error")}
         reports.append(row)
 
-    payload = {"documents": reports}
+    payload = {"only": only, "documents": reports}
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     (REPORTS_DIR / "quality.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     (REPORTS_DIR / "quality.html").write_text(_html(reports), encoding="utf-8")
@@ -126,17 +123,21 @@ def _html(reports: list[dict[str, Any]]) -> str:
     for item in reports:
         d = item.get("docling") or {}
         t = item.get("textract") or {}
+        v = item.get("vlm") or {}
         d_q = (d.get("quality") or {}).get("avg_cell_recall", "—")
         t_q = (t.get("quality") or {}).get("avg_cell_recall", "—")
+        v_q = (v.get("quality") or {}).get("avg_cell_recall", "—")
         rows.append(
             "<tr>"
             f"<td>{item['stem']}</td><td>{item.get('kind')}</td>"
             f"<td>{d.get('seconds', '—')}</td><td>{d_q}</td><td>{d.get('table_count', '—')}</td>"
             f"<td>{t.get('seconds', '—')}</td><td>{t_q}</td><td>{t.get('table_count', 'skipped' if t.get('missing') else '—')}</td>"
+            f"<td>{v.get('seconds', '—')}</td><td>{v_q}</td><td>{v.get('table_count', 'skipped' if v.get('missing') else '—')}</td>"
+            f"<td>{v.get('usd_haiku_4_5', '—')}</td>"
             "</tr>"
         )
     return f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>Docling vs Textract quality</title>
+<html><head><meta charset="utf-8"><title>Financial PDFs: Docling vs Textract vs Haiku 4.5</title>
 <style>
 body {{ font-family: Georgia, serif; margin: 40px; background: #f6f3ee; color: #1f2a32; }}
 h1 {{ font-weight: 600; }}
@@ -145,14 +146,16 @@ th, td {{ border: 1px solid #cfc6b8; padding: 8px 10px; text-align: left; }}
 th {{ background: #1f3b4d; color: #fff; }}
 caption {{ text-align: left; margin-bottom: 12px; color: #4d5a63; }}
 </style></head><body>
-<h1>Docling vs Textract — table cell recall</h1>
-<p>Recall is bag-of-cells against the generated ground-truth tables. Textract runs only when AWS credentials are present.</p>
+<h1>Financial PDFs — table cell recall</h1>
+<p>Recall is bag-of-cells against generated ground-truth tables (P&amp;L + balance sheet). VLM is Claude Haiku 4.5 via Bedrock.</p>
 <table>
-<caption>Local POC quality snapshot</caption>
+<caption>Local POC quality snapshot — financials only</caption>
 <thead><tr>
 <th>Document</th><th>Kind</th>
 <th>Docling sec</th><th>Docling recall</th><th>Docling tables</th>
 <th>Textract sec</th><th>Textract recall</th><th>Textract tables</th>
+<th>Haiku sec</th><th>Haiku recall</th><th>Haiku tables</th>
+<th>Haiku USD</th>
 </tr></thead>
 <tbody>{''.join(rows)}</tbody>
 </table>

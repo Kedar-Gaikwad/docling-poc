@@ -8,7 +8,9 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from src.config import DOCLING_OUT, SAMPLES_DIR
+from src.config import DOCLING_OUT
+from src.credentials import list_sample_pdfs
+from src.pdf_utils import page_count, split_pdf
 
 
 def _accelerator():
@@ -163,11 +165,51 @@ def convert_pdf(pdf_path: Path, *, force_full_page_ocr: bool | None = None) -> d
     return summary
 
 
-def convert_samples(sample_dir: Path | None = None) -> list[dict[str, Any]]:
-    sample_dir = sample_dir or SAMPLES_DIR
-    pdfs = sorted(sample_dir.glob("*.pdf"))
+def time_split_chunks(pdf_path: Path, *, workers: int = 2) -> dict[str, Any]:
+    """Split the PDF and convert each chunk sequentially (warm converter).
+
+    Software is $0, so N GPUs can run these chunks at the same time.
+    parallel_wall_clock_if_n_gpus is max(chunk seconds) — the wall clock if
+    each chunk had its own worker.
+    """
+    pdf_path = Path(pdf_path)
+    pages = page_count(pdf_path)
+    per = max(1, (pages + workers - 1) // workers)
+    dest = DOCLING_OUT / pdf_path.stem / "_chunks"
+    chunks = split_pdf(pdf_path, dest, pages_per_chunk=per)
+    runs = []
+    t0 = time.perf_counter()
+    for chunk in chunks:
+        print(f"  chunk {chunk.name}")
+        summary = convert_pdf(chunk, force_full_page_ocr=False)
+        runs.append(
+            {
+                "file": chunk.name,
+                "pages": summary["pages"],
+                "seconds": summary["seconds"],
+                "tables": summary["table_count"],
+            }
+        )
+        print(f"    {summary['pages']}p in {summary['seconds']}s")
+    sequential = time.perf_counter() - t0
+    return {
+        "workers": workers,
+        "pages_per_chunk": per,
+        "chunks": runs,
+        "sequential_seconds": round(sequential, 3),
+        "parallel_wall_clock_if_n_gpus": round(max(r["seconds"] for r in runs), 3) if runs else 0.0,
+    }
+
+
+def convert_samples(sample_dir: Path | None = None, only: str | None = "financials") -> list[dict[str, Any]]:
+    if sample_dir is not None:
+        pdfs = sorted(sample_dir.glob("*.pdf"))
+        if only:
+            pdfs = [p for p in pdfs if only.lower() in p.stem.lower()]
+    else:
+        pdfs = list_sample_pdfs(only=only)
     if not pdfs:
-        raise FileNotFoundError(f"No PDFs in {sample_dir}. Run: python -m src.run_poc generate")
+        raise FileNotFoundError(f"No matching PDFs (only={only!r}). Run: python -m src.run_poc generate")
     results = []
     for pdf in pdfs:
         print(f"\n=== Docling: {pdf.name} ===")

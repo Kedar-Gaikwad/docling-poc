@@ -8,7 +8,25 @@ SAMPLES_DIR = DATA_DIR / "samples"
 OUTPUT_DIR = ROOT / "output"
 DOCLING_OUT = OUTPUT_DIR / "docling"
 TEXTRACT_OUT = OUTPUT_DIR / "textract"
+VLM_OUT = OUTPUT_DIR / "vlm"
 REPORTS_DIR = OUTPUT_DIR / "reports"
+ROOTKEY_CSV = ROOT / "rootkey.csv"
+DEFAULT_AWS_REGION = "us-east-1"
+
+# Cheap VLM for this POC: Claude Haiku 4.5 via Bedrock (vision + native PDF).
+# Geo inference profile is more reliable than the bare model ID.
+HAIKU_BEDROCK_MODEL_IDS = [
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "anthropic.claude-haiku-4-5-20251001-v1:0",
+    "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+]
+HAIKU_MODEL_LABEL = "claude-haiku-4-5"
+
+# Official Anthropic list prices, USD per million tokens.
+VLM_USD_PER_MTOK = {
+    "haiku-4.5": {"input": 1.00, "output": 5.00},
+    "sonnet-4.5": {"input": 3.00, "output": 15.00},
+}
 
 # Official Amazon Textract pretrained rates, US East/West, first 1M pages / month
 # then the over-1M rate. Source: https://aws.amazon.com/textract/pricing/
